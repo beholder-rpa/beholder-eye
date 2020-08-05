@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Description>Direct3D11 bindings.</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <SharpGenMapping Include="Mappings.xml" />
+    <PackageReference Include="SharpGenTools.Sdk" Version="$(SharpGenVersion)" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\beholder_eye_win_directx\beholder_eye_win_directx.csproj" />
+    <ProjectReference Include="..\beholder_eye_win_dxgi\beholder_eye_win_dxgi.csproj" />
+  </ItemGroup>
+
+</Project>
