@@ -1,8 +1,6 @@
 ﻿namespace beholder_eye
 {
     using SixLabors.ImageSharp;
-    using SixLabors.ImageSharp.Advanced;
-    using SixLabors.ImageSharp.Formats.Png;
     using SixLabors.ImageSharp.PixelFormats;
     using SixLabors.ImageSharp.Processing;
     using System;
@@ -10,6 +8,8 @@
     using System.Drawing;
     using System.Drawing.Imaging;
     using System.IO;
+    using Point = System.Drawing.Point;
+    using Rectangle = System.Drawing.Rectangle;
 
     /// <summary>
     /// Provides image data, cursor data, and image metadata about the retrieved desktop frame.
@@ -316,19 +316,21 @@
 
                     var frameBuffer = new byte[bytes];
                     var bufferSpan = new Span<byte>(frameBuffer);
-                    var imageSpan = imageClone.GetPixelSpan();
-                    for (int i = 0; i < imageSpan.Length; i++)
+                    if (imageClone.TryGetSinglePixelSpan(out Span<Bgra32> imageSpan))
                     {
-                        bufferSpan[i * bpp] = imageSpan[i].B;
-                        bufferSpan[i * bpp + 1] = imageSpan[i].G;
-                        bufferSpan[i * bpp + 2] = imageSpan[i].R;
-                        bufferSpan[i * bpp + 3] = imageSpan[i].A;
-                    }
+                        for (int i = 0; i < imageSpan.Length; i++)
+                        {
+                            bufferSpan[i * bpp] = imageSpan[i].B;
+                            bufferSpan[i * bpp + 1] = imageSpan[i].G;
+                            bufferSpan[i * bpp + 2] = imageSpan[i].R;
+                            bufferSpan[i * bpp + 3] = imageSpan[i].A;
+                        }
 
-                    result.DesktopFrameBuffer = frameBuffer;
-                    result.DesktopWidth = imageClone.Width;
-                    result.DesktopHeight = imageClone.Height;
-                    result.IsDesktopImageBufferEmpty = bufferSpan.Trim((byte)0x00).IsEmpty;
+                        result.DesktopFrameBuffer = frameBuffer;
+                        result.DesktopWidth = imageClone.Width;
+                        result.DesktopHeight = imageClone.Height;
+                        result.IsDesktopImageBufferEmpty = bufferSpan.Trim((byte)0x00).IsEmpty;
+                    }
                 }
             }
 

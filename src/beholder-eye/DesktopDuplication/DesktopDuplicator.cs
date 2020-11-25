@@ -1,21 +1,19 @@
 ﻿namespace beholder_eye
 {
-    using beholder_eye_mathematics;
-    using beholder_eye_win;
-    using beholder_eye_win.Direct3D;
-    using beholder_eye_win.Direct3D11;
-    using beholder_eye_win.DXGI;
     using Microsoft.Extensions.Logging;
     using SharpGen.Runtime;
     using System;
     using System.Collections.Generic;
-    using System.Drawing;
-    using System.Drawing.Imaging;
-    using System.Linq;
     using System.Runtime.InteropServices;
     using System.Threading;
-    using MapFlags = beholder_eye_win.Direct3D11.MapFlags;
-    using Usage = beholder_eye_win.Direct3D11.Usage;
+    using Vortice;
+    using Vortice.Direct3D;
+    using Vortice.Direct3D11;
+    using Vortice.DXGI;
+    using MapFlags = Vortice.Direct3D11.MapFlags;
+    using Point = Vortice.Mathematics.Point;
+    using Rectangle = System.Drawing.Rectangle;
+    using Usage = Vortice.Direct3D11.Usage;
 
     /// <summary>
     /// Provides access to frame-by-frame updates of a particular desktop (i.e. one monitor), with image and cursor information.
@@ -104,7 +102,7 @@
         {
             private ID3D11Device _d3dDevice;
             private ID3D11DeviceContext _immediateContext;
-            private Rect _desktopRect;
+            private RawRect _desktopRect;
 
             private ID3D11Texture2D _desktopImageTexture;
             private IDXGIOutputDuplication _outputDuplication;
@@ -175,13 +173,13 @@
                         movedRegions[i] = new MovedRegion()
                         {
                             Source = new Point(movedRectangles[i].SourcePoint.X, movedRectangles[i].SourcePoint.Y),
-                            Destination = new Rect(movedRectangles[i].DestinationRect.Left, movedRectangles[i].DestinationRect.Top, movedRectangles[i].DestinationRect.Right, movedRectangles[i].DestinationRect.Bottom)
+                            Destination = new Rectangle(movedRectangles[i].DestinationRect.Left, movedRectangles[i].DestinationRect.Top, movedRectangles[i].DestinationRect.Right, movedRectangles[i].DestinationRect.Bottom)
                         };
                     }
                     frame.MovedRegions = movedRegions;
 
                     // Get dirty regions
-                    var dirtyRectangles = new Rect[frameInfo.TotalMetadataBufferSize];
+                    var dirtyRectangles = new RawRect[frameInfo.TotalMetadataBufferSize];
                     _outputDuplication.GetFrameDirtyRects(dirtyRectangles.Length, dirtyRectangles, out int dirtyRegionsLength);
                     var updatedRegions = new Rectangle[dirtyRegionsLength / Marshal.SizeOf(typeof(Rectangle))];
                     for (int i = 0; i < updatedRegions.Length; i++)
@@ -382,9 +380,16 @@
                     throw new DesktopDuplicationException("Couldn't create a DXGI Factory.");
                 }
 
+                IDXGIAdapter1 adapter = null;
+                IDXGIOutput output = null;
                 try
                 {
-                    using var adapter = factory.EnumAdapters1().ElementAtOrDefault(adapterIndex);
+                    var result = factory.EnumAdapters1(adapterIndex, out adapter);
+                    if (result.Failure)
+                    {
+                        throw new DesktopDuplicationException($"An error occurred attempting to retrieve the adapter at the specified index ({adapterIndex}): {result}");
+                    }
+
                     if (adapter == null)
                     {
                         throw new DesktopDuplicationException($"An adapter was not found at the specified index ({adapterIndex}).");
@@ -399,7 +404,12 @@
                     }
 
                     using var device = dd._d3dDevice.QueryInterface<IDXGIDevice>();
-                    using var output = adapter.EnumOutputs().ElementAtOrDefault(outputDeviceIndex);
+                    var outputResult = adapter.EnumOutputs(outputDeviceIndex, out output);
+                    if (outputResult.Failure)
+                    {
+                        throw new DesktopDuplicationException($"An error occurred attempting to retrieve the output device at the specified index ({outputDeviceIndex}): {outputResult}");
+                    }
+
                     if (output == null)
                     {
                         throw new DesktopDuplicationException($"An output was not found at the specified index ({outputDeviceIndex}).");
@@ -407,18 +417,20 @@
 
                     logger.LogInformation($"Using output device on adapter {adapterIndex} at index {outputDeviceIndex}.");
 
-                    var output5 = output.QueryInterface<IDXGIOutput5>();
+                    var output6 = output.QueryInterface<IDXGIOutput6>();
                     try
                     {
                         // Copy the values to a new rect.
-                        var rectTemp = output5.Description.DesktopCoordinates;
-                        dd._desktopRect = new Rect(rectTemp.Left, rectTemp.Top, rectTemp.Right, rectTemp.Bottom);
+                        var rectTemp = output6.Description.DesktopCoordinates;
+                        dd._desktopRect = new RawRect(rectTemp.Left, rectTemp.Top, rectTemp.Right, rectTemp.Bottom);
+
+                        dd._outputDuplication = output6.DuplicateOutput(device);
 
                         var stagingTexture = new Texture2DDescription()
                         {
                             CpuAccessFlags = CpuAccessFlags.Read,
                             BindFlags = BindFlags.None,
-                            Format = Format.B8G8R8A8_UNorm,
+                            Format = dd._outputDuplication.Description.ModeDescription.Format,
                             Width = Math.Abs(dd._desktopRect.Right - dd._desktopRect.Left),
                             Height = Math.Abs(dd._desktopRect.Bottom - dd._desktopRect.Top),
                             OptionFlags = ResourceOptionFlags.None,
@@ -430,12 +442,6 @@
 
                         // Initialize the Output Duplication -- If this isn't done occassionally an 'Unsupported' result will occur with DuplicationOutput1
                         dd._desktopImageTexture = dd._d3dDevice.CreateTexture2D(stagingTexture);
-                        using (dd._outputDuplication = output5.DuplicateOutput(device))
-                        {
-                            // Do Nothing.
-                        }
-
-                        dd._outputDuplication = output5.DuplicateOutput1(device, Format.B8G8R8A8_UNorm);
                     }
                     catch (SharpGenException ex)
                     {
@@ -455,6 +461,16 @@
                 }
                 finally
                 {
+                    if (output != null)
+                    {
+                        output.Dispose();
+                    }
+
+                    if (adapter != null)
+                    {
+                        adapter.Dispose();
+                    }
+
                     if (factory != null)
                     {
                         factory.Dispose();

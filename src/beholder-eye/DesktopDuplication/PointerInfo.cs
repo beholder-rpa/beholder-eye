@@ -1,6 +1,6 @@
 ﻿namespace beholder_eye
 {
-    using beholder_eye_win.DXGI;
+    using Vortice.DXGI;
     using System.Drawing;
 
     internal class PointerInfo

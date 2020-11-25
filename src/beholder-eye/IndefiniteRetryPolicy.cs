@@ -35,7 +35,7 @@
                 }
                 catch
                 {
-                    await Task.Delay(s_random.Next(2, 12) * 5);
+                    await Task.Delay(s_random.Next(2, 12) * 5, CancellationToken.None);
                 }
             }
         }

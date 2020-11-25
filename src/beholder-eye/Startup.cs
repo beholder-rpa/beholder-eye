@@ -20,9 +20,11 @@
         {
             services.AddLogging(builder =>
             {
-                builder.AddConsole(o =>
+                builder.AddSimpleConsole(options =>
                 {
-                    o.TimestampFormat = o.TimestampFormat = "[HH:mm:ss] ";
+                    options.IncludeScopes = true;
+                    options.SingleLine = true;
+                    options.TimestampFormat = "[HH:mm:ss] ";
                 });
                 builder.AddDebug();
             });
